@@ -3,10 +3,6 @@ from scipy.stats import hypergeom, uniform
 from multitest import MultiTest
 import pandas as pd
 
-# to do:
-# 1) function that converts time to event data to survival table
-# 2) class that takes as input a time to event data and evaluates the null
-# distribution of HCHG and all other tests
 
 def from_time_to_event_to_survival_table(time_to_event_data, time_col='time', event_col='event', group_col='group'):
     """
@@ -161,13 +157,13 @@ def _validate_survival_inputs(Nt1, Nt2, Ot1, Ot2):
         if np.any(np.diff(Nt2) > 0):
             raise ValueError("At-risk counts in group 2 must be non-increasing over time.")
     
-    # Check that the difference in at-risk counts is >= events
-    # This ensures logical consistency: Nt[i] - Nt[i+1] >= Ot[i]
+    # Check that events cannot exceed the reduction in at-risk counts
+    # Logical consistency: Nt[i] - Nt[i+1] >= Ot[i] (reduction includes events + censoring)
     if len(Nt1) > 1:
         diff_Nt1 = -np.diff(Nt1)
         diff_Nt2 = -np.diff(Nt2)
-        if np.any(diff_Nt1 > Ot1[:-1]) or np.any(diff_Nt2 > Ot2[:-1]):
-            raise ValueError("Differences in at-risk counts must be greater than or equal to corresponding event counts.")
+        if np.any(Ot1[:-1] > diff_Nt1) or np.any(Ot2[:-1] > diff_Nt2):
+            raise ValueError("Number of events cannot exceed the reduction in at-risk counts.")
 
 
 def hypergeom_test(k, M, n, N, alternative='greater', randomize=False):
@@ -222,18 +218,20 @@ def hypergeom_test(k, M, n, N, alternative='greater', randomize=False):
     if alternative == 'less':
         return hypergeom.cdf(k, M, n, N) - U1 * hypergeom.pmf(k, M, n, N)
     if alternative == 'two-sided':
-        l1 = hypergeom.cdf(k, M, n, N)
-        l2 = hypergeom.cdf(N - k, M, n, N)
-        r1 = hypergeom.sf(k - 1, M, n, N)
-        r2 = hypergeom.sf(N - k + 1, M, n, N)
-        l = np.minimum(l1, l2)
-        r = np.minimum(r1, r2)
-        if randomize:
-            l_tie = (l1 == l2)
-            r_tie = (r1 == r2)
-            l[l_tie] -= U1[l_tie] * hypergeom.pmf(k[l_tie], M[l_tie], n[l_tie], N[l_tie]) / 2
-            r[r_tie] -= U2[r_tie] * hypergeom.pmf(k[r_tie], M[r_tie], n[r_tie], N[r_tie]) / 2
-        return l + r
+        pvals = np.zeros(k.shape)
+        for idx in np.ndindex(k.shape):
+            ki, Mi, ni, Ni = int(k[idx]), int(M[idx]), int(n[idx]), int(N[idx])
+            kk = np.arange(0, Ni + 1)
+            pm = hypergeom.pmf(ki, Mi, ni, Ni)
+            pp = hypergeom.pmf(kk, Mi, ni, Ni)
+            pval = np.sum(pp[pp <= pm])
+            if randomize:
+                pval -= U1[idx] * pp[pp == pm].sum()
+            pvals[idx] = pval
+        if k.ndim == 0:
+            return pvals.item()
+        return pvals
+
     raise ValueError("'alternative' must be one of 'greater', 'less', or 'two-sided'.")
 
 def _multi_test(Nt1, Nt2, Ot1=None, Ot2=None, **kwargs):
@@ -270,21 +268,17 @@ def hchg_test(Nt1, Nt2, Ot1=None, Ot2=None,
     Higher criticism test of hypergeometric P-values for comparing survival data.
 
     Args:
-        Nt1 (array-like): Number of at-risk subjects in group 1 per time
-        Nt2 (array-like): Number of at-risk subjects in group 2 per time
-        Ot1 (array-like): Number of failure events in group 1 per time; if None, will be computed as -np.diff(Nt1)
-        Ot2 (array-like): Number of failure events in group 2 per time; if None, will be computed as -np.diff(Nt2)
+        Nt1 (array-like): Number of at-risk subjects in group 1 per time interval
+        Nt2 (array-like): Number of at-risk subjects in group 2 per time interval
+        Ot1 (array-like): Number of failure events in group 1 per time interval
+        Ot2 (array-like): Number of failure events in group 2 per time interval
         alternative (str): 'greater', 'less', or 'two-sided' (default: 'two-sided')
-        **kwargs: Additional arguments to be passed to the hypergeometric test including:
-            - gamma (float): Parameter for higher criticism (default: 0.2)
+        **kwargs: Additional arguments including:
+            - gamma (float): Parameter for higher criticism (default: 0.4)
             - randomize (bool): Whether to use randomized tests (default: False)
 
     Returns:
         float: HC test statistic
-
-    Example:
-        >>> hchg_test([100, 95, 90], [100, 92, 88])
-        ...
     """
     _validate_survival_inputs(Nt1, Nt2, Ot1, Ot2)
     gamma = kwargs.get('gamma', 0.4)
@@ -307,18 +301,15 @@ def fisher_hg_test(Nt1, Nt2, Ot1=None, Ot2=None, **kwargs):
     Fisher combination test of hypergeometric P-values.
 
     Args:
-        Nt1 (array-like): Number of at-risk subjects in group 1 per time
-        Nt2 (array-like): Number of at-risk subjects in group 2 per time
-        Ot1 (array-like): Number of failure events in group 1 per time; if None, will be computed as -np.diff(Nt1)
-        Ot2 (array-like): Number of failure events in group 2 per time; if None, will be computed as -np.diff(Nt2)
-        **kwargs: Additional arguments to be passed to the hypergeometric test
+        Nt1 (array-like): Number of at-risk subjects in group 1 per time interval
+        Nt2 (array-like): Number of at-risk subjects in group 2 per time interval
+        Ot1 (array-like): Number of failure events in group 1 per time interval
+        Ot2 (array-like): Number of failure events in group 2 per time interval
+        **kwargs: Additional arguments including:
+            - randomize (bool): Whether to use randomized tests (default: False)
 
     Returns:
         tuple: (test statistic, P-value of corresponding chi-squared test)
-
-    Example:
-        >>> fisher_hg_test([100, 95, 90], [100, 92, 88])
-        ...
     """
     _validate_survival_inputs(Nt1, Nt2, Ot1, Ot2)
     mtest = _multi_test(Nt1, Nt2, Ot1, Ot2, **kwargs)
@@ -329,10 +320,10 @@ def hg_test_dashboard(Nt1, Nt2, Ot1=None, Ot2=None, **kwargs):
     Comprehensive dashboard for hypergeometric-based survival tests.
 
     Args:
-        Nt1 (array-like): Number of at-risk subjects in group 1 per time
-        Nt2 (array-like): Number of at-risk subjects in group 2 per time
-        Ot1 (array-like): Number of failure events in group 1 per time; if None, will be computed as -np.diff(Nt1)
-        Ot2 (array-like): Number of failure events in group 2 per time; if None, will be computed as -np.diff(Nt2)
+        Nt1 (array-like): Number of at-risk subjects in group 1 per time interval
+        Nt2 (array-like): Number of at-risk subjects in group 2 per time interval
+        Ot1 (array-like): Number of failure events in group 1 per time interval
+        Ot2 (array-like): Number of failure events in group 2 per time interval
         **kwargs: Additional arguments including:
             - randomize (bool): Whether to use randomized tests (default: False)
             - pvals_alternative (str): Alternative for individual tests (default: 'two-sided')
@@ -341,10 +332,6 @@ def hg_test_dashboard(Nt1, Nt2, Ot1=None, Ot2=None, **kwargs):
 
     Returns:
         tuple: (DataFrame with detailed results, dict with test statistics)
-
-    Example:
-        >>> hg_test_dashboard([100, 95, 90], [100, 92, 88])
-        ...
     """
     _validate_survival_inputs(Nt1, Nt2, Ot1, Ot2)
     df = pd.DataFrame()

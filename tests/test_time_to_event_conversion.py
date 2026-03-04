@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-import sys
-sys.path.append("../src")
 from multiHGtest import from_time_to_event_to_survival_table, HCHGtest
 
 # Try to import lifelines for the real dataset test

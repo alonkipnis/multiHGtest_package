@@ -1,8 +1,5 @@
 import numpy as np
 from scipy.stats import poisson
-
-import sys
-sys.path.append("../src")
 from multiHGtest import testHG_dashboard, HCHGtest, FisherHGtest
 
 

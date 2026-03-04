@@ -1,7 +1,5 @@
 import numpy as np
 import pytest
-import sys
-sys.path.append("../src")
 from multiHGtest import hypergeom_test, hchg_test, fisher_hg_test, hg_test_dashboard
 
 def test_hypergeom_test_array_inputs():

@@ -1,8 +1,5 @@
 import numpy as np
 from scipy.stats import poisson
-
-import sys
-sys.path.append("../src")
 from multiHGtest import hypergeom_test
 from matplotlib import pyplot as plt
 
