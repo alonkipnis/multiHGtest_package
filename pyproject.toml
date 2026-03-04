@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "multiHGtest"
-version = "0.0.5"
+version = "0.0.6"
 description = "Testing for differences in survival using multiple hypergeometric P-values and higher criticism"
 readme = "README.md"
 license = "MIT"

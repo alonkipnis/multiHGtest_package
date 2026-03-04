@@ -7,7 +7,7 @@
 
 ## Overview
 
-The **multiHGtest** package provides nonparametric methods for comparing survival between two populations with sensitivity to *rare and localized* departures from the null hypothesis of equal hazards. Unlike standard tests (e.g., log-rank), these methods are designed to detect non-proportional hazard differences that occur at only a few time points.
+The **multiHGtest** package provides nonparametric methods for comparing survival between two populations with sensitivity to *rare and localized* departures from the null hypothesis of equal hazards. Unlike standard tests (e.g., log-rank), this method is designed to detect non-proportional hazard differences that occur at only a few time intervals, whereas the identity of those intervals is unknwon in advance. 
 
 The approach works by:
 1. Computing exact hypergeometric P-values at each time interval, testing whether the observed number of events in one group deviates from what is expected under equal hazard rates.
